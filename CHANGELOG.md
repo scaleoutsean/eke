@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v0.1.2
+
+- Changed:
+  - Bump Go to 1.26.5
+
 ## v0.1.1
 
 - Changed:
