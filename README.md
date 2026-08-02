@@ -1,20 +1,33 @@
 # Eke
 
-A CLI for doing stuff with BeeGFS storage pools and Hive Index.
+A CLI for doing stuff with BeeGFS storage pools and index.
 
-Eke was built for version 8.3. Older or newer versions may not work exactly the same.
+| Eke | BeeGFS | 
+| --- | ------ |
+| 0.2 | 8.4    |
+| 0.1 | 8.3    |
+
+I don't test current version of Eke with older minor or major versions of BeeGFS. It's impossible to know if existing versions Eke will be able to work with next version of BeeGFS since they change stuff even between minor releases.
+
+They even changed the name from [BeeGFS Index](https://doc.beegfs.io/8.3/hive/hive_index.html) to [BeeGFS Index](https://doc.beegfs.io/8.4/advanced_topics/beegfs_index.html#beegfsindex) between minor releases.
+
+Tip: alias `beegfs` to disable emojis to the extent possible (they still appear in 8.4.0 output).
+
+```sh
+alias beegfs='/usr/sbin/beegfs --disable-emojis'
+```
 
 ## Features
 
-Eke does stuff with BeeGFS pools and [Hive Index](https://doc.beegfs.io/latest/hive/hive_index.html)
+Eke does stuff with BeeGFS pools and [BeeGFS Index](https://doc.beegfs.io/latest/hive/hive_index.html)
 
-## v0.1 Commands
+## v0.2 Commands
 
 - `show-pools` - enhanced wrapper for BeeGFS
 - `migrate-safe` - thin wrapper for BeeGFS `entry migrate` sub-commmand
 - `migrate-smart` - fancy wrapper for BeeGFS `entry migrate`
 - `migrate-up` - limited wrapper for migrating data "up" (archive-to-default)
-- `hive-import` - consolidates Hive index for easy reporting and analysis
+- `index-import` - consolidates BeeGFS index for easy reporting and analysis
 - `migrate-ledger` - checks manifest and status of migrate jobs
 - `migrate-verify` - checks status of input files post-migration
 
@@ -29,6 +42,20 @@ Version:
 ```sh
 ./bin/eke --version
 ```
+
+## Get started with BeeGFS index
+
+See [the 8.4 documentation](https://doc.beegfs.io/8.4/advanced_topics/beegfs_index.html#beegfs-index-create) for details. In my case, I prefer to keep index out-of-tree and use just two threads in my development environment. This is my `/mnt/beegfs/.beegfs.index`:
+
+```sh
+[index]
+path = "/mnt/beegfs"
+root = "/mnt/index"
+addr = "local"
+threads = 2
+```
+
+The first time we can create index from scratch (`beegfs index create`), and later we can refresh it with: `beegfs index rescan [mount-or-sub-dir-path] [--recursse]`.
 
 ## `eke` sub-commands
 
@@ -144,9 +171,9 @@ Additionally, either of these must be present:
 - `path`
 - or `name` (so `eke` can derive `path` from `source_dir || '/' || name`)
 
-For future batching and scoring refinements, the recommended export is still `SELECT *` from the candidate Hive-derived table and then let `eke` use the subset it currently understands.
+For future batching and scoring refinements, the recommended export is still `SELECT *` from the candidate Index-derived table and then let `eke` use the subset it currently understands.
 
-Do not export from `hive_summary_counts` for `migrate-smart`; that table is useful for reporting, but it does not contain per-file `path` or `size` data.
+Do not export from `index_summary_counts` for `migrate-smart`; that table is useful for reporting, but it does not contain per-file `path` or `size` data.
 
 ```sh
 ./bin/eke migrate-smart \
@@ -176,7 +203,7 @@ In v0.1 this is intentionally file-only and dry-run by default. It reads pool st
 
 Execution is batched (currently up to 256 paths per `beegfs entry migrate` call) to avoid oversized command lines on very large candidate sets.
 
-If a batch fails, `eke` retries each path in that batch individually; stale paths (for example files removed after Hive index snapshot) are skipped with warnings while other valid paths continue.
+If a batch fails, `eke` retries each path in that batch individually; stale paths (for example files removed after BeeGFS index snapshot) are skipped with warnings while other valid paths continue.
 
 `migrate-smart` includes the same stripe-fit precheck behavior as `migrate-up`; add `--enforce-stripe-fit` to fail before migration when estimated required targets exceed destination pool target count.
 
@@ -200,7 +227,7 @@ Sanity checks:
 - If `--min-move-capacity` is greater than 25% of source pool capacity, `migrate-smart` prints a warning and continues.
 - Add `--enforce-safe-move-capacity` to turn that >25% condition into a hard error.
 
-If your candidate input originates from Hive index paths (for example `/mnt/index/...`) and your BeeGFS mount path differs (for example `/mnt/beegfs/...`), use `--path-rewrite-from` and `--path-rewrite-to`. Users who use in-tree Hive index don't have to do that.
+If your candidate input originates from BeeGFS index paths (for example `/mnt/index/...`) and your BeeGFS mount path differs (for example `/mnt/beegfs/...`), use `--path-rewrite-from` and `--path-rewrite-to`. Users who use in-tree BeeGFS index don't have to do that.
 
 When the source tier is already below `--max-default`, `migrate-smart` reports that no migration is needed and does not select files.
 
@@ -257,7 +284,7 @@ Example candidate export:
 ```sql
 COPY (
 	SELECT *
-	FROM hive_entries
+	FROM index_entries
 	WHERE snapshot_id = '20260702'
 		AND type = 'f'
 		AND source_dir LIKE '/mnt/projects/%'
@@ -289,22 +316,22 @@ Behavior:
 - Exits non-zero when mismatches or errors are found.
 - Missing paths are reported but not fatal by default; add `--strict-missing` to fail on missing candidates.
 
-### hive-import
+### index-import
 
-**NOTE:** `--output-db` should be outside of both BeeGFS mount path and `index-root` path (which can be omitted if in-tree Hive Index is used, i.e. actual paths match index file paths).
+**NOTE:** `--output-db` should be outside of both BeeGFS mount path and `index-root` path (which can be omitted if in-tree BeeGFS Index is used, i.e. actual paths match index file paths).
 
 Import all `.bdm.db` files under index root into a consolidated DuckDB snapshot path. With BeeGFS mounted to `/mnt/beegfs` and indexes under `/mnt/index`, we pick a different location for database artifacts.
 
 ```sh
-cd /mnt/filesystem-analytics; mkdir out # avoid using /mnt/beegfs or named Hive index path
-./bin/eke hive-import --index-root /mnt/index --output-db ./out/hive_snapshot.duckdb
-./bin/eke hive-import --index-root /mnt/index --output-format both --parquet-dir ./out/parquet
-./bin/eke hive-import --index-root /mnt/index --output-db ./out/hive_snapshot.duckdb --snapshot 20260702
-./bin/eke hive-import --manager b1 --index-root /mnt/index --output-db ./out/hive_snapshot.duckdb --snapshot 20260702
-./bin/eke hive-import --index-root /mnt/index --output-db ./out/hive_snapshot.duckdb --snapshot 20260702 --destination ./publish/20260702
-./bin/eke hive-import --index-root /mnt/index --output-db ./out/hive_snapshot.duckdb --snapshot 20260702 --destination s3://storage/reports/20260702
-./bin/eke hive-import --index-root /mnt/index --output-db ./out/hive_snapshot.duckdb --snapshot 20260702 --destination https://s3.example.com/storage/reports/20260702 --s3-endpoint https://s3.example.com
-./bin/eke hive-import --index-root /mnt/index --output-db ./out/hive_snapshot.duckdb --snapshot 20260702 --destination s3://storage/reports/20260702 --post-step './scripts/post_process_manifests.sh'
+cd /mnt/filesystem-analytics; mkdir out # avoid using /mnt/beegfs or named BeeGFS index path
+./bin/eke index-import --index-root /mnt/index --output-db ./out/hive_snapshot.duckdb
+./bin/eke index-import --index-root /mnt/index --output-format both --parquet-dir ./out/parquet
+./bin/eke index-import --index-root /mnt/index --output-db ./out/hive_snapshot.duckdb --snapshot 20260702
+./bin/eke index-import --manager b1 --index-root /mnt/index --output-db ./out/hive_snapshot.duckdb --snapshot 20260702
+./bin/eke index-import --index-root /mnt/index --output-db ./out/hive_snapshot.duckdb --snapshot 20260702 --destination ./publish/20260702
+./bin/eke index-import --index-root /mnt/index --output-db ./out/hive_snapshot.duckdb --snapshot 20260702 --destination s3://storage/reports/20260702
+./bin/eke index-import --index-root /mnt/index --output-db ./out/hive_snapshot.duckdb --snapshot 20260702 --destination https://s3.example.com/storage/reports/20260702 --s3-endpoint https://s3.example.com
+./bin/eke index-import --index-root /mnt/index --output-db ./out/hive_snapshot.duckdb --snapshot 20260702 --destination s3://storage/reports/20260702 --post-step './scripts/post_process_manifests.sh'
 ```
 
 Remote manager execution:
@@ -329,8 +356,8 @@ Depending on needs, you may have at least three files per prefix as a basic resu
 
 ```sh
 $ aws s3 ls s3://beegfs/snapshot=20260702/
-2026-07-03 07:17:45       7316 hive_entries_snapshot=20260702.parquet
-2026-07-03 07:17:19       1233 hive_summary_counts_snapshot=20260702.parquet
+2026-07-03 07:17:45       7316 index_entries_snapshot=20260702.parquet
+2026-07-03 07:17:19       1233 index_summary_counts_snapshot=20260702.parquet
 2026-07-03 07:29:30        588 manifest.json
 ```
 
@@ -357,22 +384,22 @@ CREATE OR REPLACE SECRET secret (
 );
 
 SELECT *
-FROM 's3://beegfs/hive_summary_counts_snapshot=20260702.parquet';
+FROM 's3://beegfs/index_summary_counts_snapshot=20260702.parquet';
 
 SELECT summary_count
-FROM 's3://beegfs/hive_summary_counts_snapshot=20260702.parquet'
+FROM 's3://beegfs/index_summary_counts_snapshot=20260702.parquet'
 WHERE source_dir LIKE '/mnt/index/project1%';
 ```
 
-`hive-import` creates:
+`index-import` creates:
 
-- `hive_entries`: flattened entries table with source db metadata.
-- `hive_summary_counts`: per-db row counts for entries and summary.
+- `index_entries`: flattened entries table with source db metadata.
+- `index_summary_counts`: per-db row counts for entries and summary.
 
 Snapshot behavior:
 
 - `--snapshot` is a logical run identifier stored in the `snapshot_id` column.
-- Running `hive-import` repeatedly with different snapshot IDs appends historical snapshots into the same DuckDB file.
+- Running `index-import` repeatedly with different snapshot IDs appends historical snapshots into the same DuckDB file.
 - Running with the same snapshot ID is idempotent: existing rows for that snapshot are replaced before insert.
 
 Flag style:

@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v0.2
+
+- Changed:
+  - Fix what BeeGFS 8.4.0 has broken with its index DB format changes
+  - `hive-import` sub-command renamed to `index-import` because BeeGFS renamed index in 8.4.0
+
 ## v0.1.2
 
 - Changed:
