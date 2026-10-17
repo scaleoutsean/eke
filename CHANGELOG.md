@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v0.2.1
+- Changed:
+  - Update to Go 1.27
+  - Create static builds
+
 ## v0.2
 
 - Changed:

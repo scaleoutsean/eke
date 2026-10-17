@@ -19,7 +19,7 @@ alias beegfs='/usr/sbin/beegfs --disable-emojis'
 
 ## Features
 
-Eke does stuff with BeeGFS pools and [BeeGFS Index](https://doc.beegfs.io/latest/hive/hive_index.html)
+Eke does stuff with BeeGFS pools and [BeeGFS Index](https://doc.beegfs.io/latest/hive/hive_index.html).
 
 ## v0.2 Commands
 
