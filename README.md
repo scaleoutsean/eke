@@ -9,7 +9,7 @@ A CLI for doing stuff with BeeGFS storage pools and index.
 
 I don't test current version of Eke with older minor or major versions of BeeGFS. It's impossible to know if existing versions Eke will be able to work with next version of BeeGFS since they change stuff even between minor releases.
 
-They even changed the name from [BeeGFS Index](https://doc.beegfs.io/8.3/hive/hive_index.html) to [BeeGFS Index](https://doc.beegfs.io/8.4/advanced_topics/beegfs_index.html#beegfsindex) between minor releases.
+They even changed the name from [BeeGFS Hive Index](https://doc.beegfs.io/8.3/hive/hive_index.html) to [BeeGFS Index](https://doc.beegfs.io/8.4/advanced_topics/beegfs_index.html#beegfsindex) between minor releases.
 
 Tip: alias `beegfs` to disable emojis to the extent possible (they still appear in 8.4.0 output).
 
